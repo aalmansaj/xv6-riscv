@@ -459,6 +459,7 @@ scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
+  int tickets[NPROC];
   int tickets_total, ticket_win, tickets_sum;
   
   c->proc = 0;
@@ -468,21 +469,30 @@ scheduler(void)
 
     // Get total number of tickets of 'RUNNABLE' processes.
     tickets_total = 0;
-    for(p = proc; p < &proc[NPROC]; p++)
-      if(p->state == RUNNABLE)
-        tickets_total+= p->tickets;
+    for(int i = 0; i < NPROC; i++){
+      p = &proc[i];
+      if(p->state == RUNNABLE){
+        tickets[i] = p->tickets;
+        tickets_total += p->tickets;
+      }
+      else{
+        tickets[i] = 0;
+      }
+    }
 
-    // Choose lottery ticket
+    // Choose lottery ticket.
     ticket_win = rand() % tickets_total;
 
-    // Winning process will get the CPU.
+    // Winning process gets the CPU.
     tickets_sum = 0;
-    for(p = proc; p < &proc[NPROC] && tickets_sum <= ticket_win; p++){
-      acquire(&p->lock);
-      if(p->state == RUNNABLE){
-        // Check if process 'has won' the lottery.
-        tickets_sum += p->tickets;
-        if(tickets_sum > ticket_win){
+    for(int i = 0; i < NPROC && tickets_sum <= ticket_win; i++){
+      // Check if process 'has won' the lottery.
+      tickets_sum += tickets[i];
+      if(tickets_sum > ticket_win){
+        p = &proc[i];
+        // Check if winning process is still 'RUNNABLE' (multi-core).
+        acquire(&p->lock);
+        if(p->state == RUNNABLE){
           // Switch to chosen process.  It is the process's job
           // to release its lock and then reacquire it
           // before jumping back to us.
@@ -496,8 +506,8 @@ scheduler(void)
           // It should have changed its p->state before coming back.
           c->proc = 0;
         }
+        release(&p->lock);
       }
-      release(&p->lock);
     }
   }
 }

@@ -20,6 +20,8 @@ void spin() {
         }
         x++;
     }
+
+    printf("Result: x=%d, y=%d\n", x, y);
 }
 
 #pragma GCC pop_options
