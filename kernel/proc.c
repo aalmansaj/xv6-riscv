@@ -250,8 +250,9 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
-  // set initial number of tickets.
+  // set initial number of tickets and ticks.
   p->tickets = 1;
+  p->ticks = 0;
 
   p->state = RUNNABLE;
 
@@ -316,6 +317,9 @@ fork(void)
 
   // Copy number of tickets.
   np->tickets = p->tickets;
+
+  // Reset ticks.
+  np->ticks = 0;
 
   pid = np->pid;
 
