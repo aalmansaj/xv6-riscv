@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "pstat.h"
 
 struct cpu cpus[NCPU];
 
@@ -249,6 +250,9 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
+  // set initial number of tickets.
+  p->tickets = 1;
+
   p->state = RUNNABLE;
 
   release(&p->lock);
@@ -309,6 +313,9 @@ fork(void)
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
+
+  // Copy number of tickets.
+  np->tickets = p->tickets;
 
   pid = np->pid;
 
@@ -441,30 +448,50 @@ wait(uint64 addr)
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
+// Lottery Scheduler: Choose process based on
+// the number of tickets it holds.
 void
 scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
+  int tickets_total, ticket_win, tickets_sum;
   
   c->proc = 0;
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
 
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+    // Get total number of tickets of 'RUNNABLE' processes.
+    tickets_total = 0;
+    for(p = proc; p < &proc[NPROC]; p++)
+      if(p->state == RUNNABLE)
+        tickets_total+= p->tickets;
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
+    // Choose lottery ticket
+    ticket_win = rand() % tickets_total;
+
+    // Winning process will get the CPU.
+    tickets_sum = 0;
+    for(p = proc; p < &proc[NPROC] && tickets_sum <= ticket_win; p++){
+      acquire(&p->lock);
+      if(p->state == RUNNABLE){
+        // Check if process 'has won' the lottery.
+        tickets_sum += p->tickets;
+        if(tickets_sum > ticket_win){
+          // Switch to chosen process.  It is the process's job
+          // to release its lock and then reacquire it
+          // before jumping back to us.
+          p->state = RUNNING;
+          // Increase number of ticks.
+          p->ticks += 1;
+          c->proc = p;
+          swtch(&c->context, &p->context);
+
+          // Process is done running for now.
+          // It should have changed its p->state before coming back.
+          c->proc = 0;
+        }
       }
       release(&p->lock);
     }
@@ -680,4 +707,29 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+// Returns information about running processes
+// including the number of times they have been chosen
+// by the scheduler to run on the CPU (ticks).
+int
+getpinfo(uint64 addr)
+{
+  struct proc *p;
+  struct pstat pi;
+
+  // Loop over process table
+  for(int i = 0; i < NPROC; i++){
+    p = &proc[i];
+    if (p->state != UNUSED) {
+      pi.inuse[i] = 1;
+      pi.tickets[i] = p->tickets;
+      pi.pid[i] = p->pid;
+      pi.ticks[i] = p->ticks;
+    }
+  }
+
+  // Copy data from kernel to userspace
+  p = myproc();
+  return copyout(p->pagetable, addr, (char *)&pi, sizeof(pi));
 }

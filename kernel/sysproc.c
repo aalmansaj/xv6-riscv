@@ -102,3 +102,13 @@ sys_settickets(void)
   myproc()->tickets = n;
   return 0;
 }
+
+// get info about running processes
+uint64
+sys_getpinfo(void)
+{
+  uint64 pi; // user pointer to struct pstat
+
+  argaddr(0, &pi);
+  return getpinfo(pi);
+}
