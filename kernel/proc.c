@@ -727,6 +727,12 @@ getpinfo(uint64 addr)
       pi.pid[i] = p->pid;
       pi.ticks[i] = p->ticks;
     }
+    else {
+      pi.inuse[i] = 0;
+      pi.tickets[i] = 0;
+      pi.pid[i] = 0;
+      pi.ticks[i] = 0;
+    }
   }
 
   // Copy data from kernel to userspace
