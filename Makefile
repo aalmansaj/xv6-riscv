@@ -23,6 +23,7 @@ OBJS = \
   $K/log.o \
   $K/sleeplock.o \
   $K/file.o \
+  $K/vma.o \
   $K/pipe.o \
   $K/exec.o \
   $K/sysfile.o \
@@ -135,6 +136,7 @@ UPROGS=\
 	$U/_zombie\
 	$U/_testtickets\
 	$U/_lotterytest\
+	$U/_mmaptest\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

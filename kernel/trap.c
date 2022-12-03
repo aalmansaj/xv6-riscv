@@ -67,6 +67,21 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if(r_scause() == 13){
+    // load page-fault
+    uint64 page_fault = r_stval(); // faulting virtual address
+
+    // check if page-fault took place beyond process size limit.
+    if(page_fault > p->sz){
+      printf("usertrap(): page-fault(%p) at address(%p) pid=%d\n",
+              r_scause(), page_fault, p->pid);
+      setkilled(p);
+    } else {
+      // when page-fault is in the range of the process mapped memory,
+      // load the page from the corresponding file.
+      if(vmaloadpage(page_fault) != 0)
+        printf("usertrap(): error loading page (vmaloadpage) pid=%d\n", p->pid);
+    }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());

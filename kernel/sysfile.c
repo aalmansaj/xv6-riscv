@@ -1,7 +1,7 @@
 //
 // File-system system calls.
 // Mostly argument checking, since we don't trust
-// user code, and calls into file.c and fs.c.
+// user code, and calls into file.c, fs.c and vma.c.
 //
 
 #include "types.h"
@@ -15,6 +15,7 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "vma.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -502,4 +503,82 @@ sys_pipe(void)
     return -1;
   }
   return 0;
+}
+
+// Allocate a VMA descriptor for the given VMA.
+static int
+vdalloc(struct vma *v)
+{
+  int vd;
+  struct proc *p = myproc();
+
+  for(vd = 0; vd < NOVMA; vd++){
+    if(p->ovma[vd] == 0){
+      p->ovma[vd] = v;
+      return vd;
+    }
+  }
+  return -1;
+}
+
+// mmap() syscall: Memory map a file.
+uint64
+sys_mmap()
+{
+  int addr, length, prot, flags, fd, offset;
+  uint64 error = 0xffffffffffffffff;
+  struct proc *p = myproc();
+  struct vma *v;
+  struct file *f;
+
+  argint(0, &addr);
+  argint(1, &length);
+  argint(2, &prot);
+  argint(3, &flags);
+  argint(4, &fd);
+  argint(5, &offset);
+
+  // 'addr' and 'offset' are expected to be 0
+  if(addr != 0 || offset != 0)
+    return error;
+
+  // Allocate VMA struct
+  if((v = vmaalloc()) == 0 || vdalloc(v) < 0)
+    // TODO: Free VMA v
+    return error;
+
+  // Fetch file from 'fd' argument
+  if((f = p->ofile[fd]) == 0)
+    return error;
+  v->file = f;
+  // Increase file reference count
+  filedup(f);
+
+  // Increase process size (Lazy memory allocation)
+  v->addr = p->sz;
+  v->length = length;
+  p->sz += length;
+
+  // Set permissions
+  v->readable = (prot & PROT_READ);
+  v->writeable = (prot & PROT_WRITE);
+
+  // Set mapping type
+  if(flags == MAP_SHARED)
+    v->map = SHARED;
+  else if(flags == MAP_PRIVATE)
+    v->map = PRIVATE;
+  else
+    // TODO: Free VMA v
+    return error;
+
+  // Return VMA address
+  return v->addr;
+}
+
+uint64
+sys_munmap()
+{
+  printf("Not done yet.\n");
+  return -1;
 }
