@@ -313,6 +313,11 @@ fork(void)
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
 
+  // Copy VMAs.
+  for(i = 0; i < NOVMA; i++)
+    if(p->ovma[i])
+      np->ovma[i] = vmadup(p->ovma[i]);
+
   safestrcpy(np->name, p->name, sizeof(p->name));
 
   // Copy number of tickets.
@@ -368,6 +373,15 @@ exit(int status)
       struct file *f = p->ofile[fd];
       fileclose(f);
       p->ofile[fd] = 0;
+    }
+  }
+
+  // Unmap all VMAs.
+  for(int vd = 0; vd < NOVMA; vd++){
+    if(p->ovma[vd]){
+      struct vma *v = p->ovma[vd];
+      vmadealloc(v);
+      p->ovma[vd] = 0;
     }
   }
 

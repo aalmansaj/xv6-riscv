@@ -79,8 +79,10 @@ usertrap(void)
     } else {
       // when page-fault is in the range of the process mapped memory,
       // load the page from the corresponding file.
-      if(vmaloadpage(page_fault) != 0)
+      if(vmaloadpage(page_fault) != 0){
         printf("usertrap(): error loading page (vmaloadpage) pid=%d\n", p->pid);
+        setkilled(p);
+      }
     }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);

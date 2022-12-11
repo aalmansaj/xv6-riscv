@@ -513,7 +513,7 @@ vdalloc(struct vma *v)
   struct proc *p = myproc();
 
   for(vd = 0; vd < NOVMA; vd++){
-    if(p->ovma[vd] == 0){
+    if(p->ovma[vd] == 0 || p->ovma[vd]->inuse == 0){
       p->ovma[vd] = v;
       return vd;
     }
@@ -525,13 +525,14 @@ vdalloc(struct vma *v)
 uint64
 sys_mmap()
 {
-  int addr, length, prot, flags, fd, offset;
+  uint64 addr;
+  int length, prot, flags, fd, offset;
   uint64 error = 0xffffffffffffffff;
   struct proc *p = myproc();
   struct vma *v;
   struct file *f;
 
-  argint(0, &addr);
+  argaddr(0, &addr);
   argint(1, &length);
   argint(2, &prot);
   argint(3, &flags);
@@ -543,9 +544,10 @@ sys_mmap()
     return error;
 
   // Allocate VMA struct
-  if((v = vmaalloc()) == 0 || vdalloc(v) < 0)
-    // TODO: Free VMA v
+  if((v = vmaalloc()) == 0 || vdalloc(v) < 0){
+    vmadealloc(v);
     return error;
+  }
 
   // Fetch file from 'fd' argument
   if((f = p->ofile[fd]) == 0)
@@ -564,21 +566,64 @@ sys_mmap()
   v->writeable = (prot & PROT_WRITE);
 
   // Set mapping type
-  if(flags == MAP_SHARED)
+  if(flags == MAP_SHARED){
+    // Can't write changes to file if O_RDONLY
+    if (v->writeable && !f->writable){
+      vmadealloc(v);
+      return error;
+    }
     v->map = SHARED;
-  else if(flags == MAP_PRIVATE)
+  }
+  else if(flags == MAP_PRIVATE){
     v->map = PRIVATE;
-  else
-    // TODO: Free VMA v
+  }
+  else{
+    vmadealloc(v);
     return error;
+  }
 
   // Return VMA address
   return v->addr;
 }
 
+// munmap() syscall: Unmap pages of memory-mmaped file.
 uint64
 sys_munmap()
 {
-  printf("Not done yet.\n");
-  return -1;
+  uint64 addr;
+  int length;
+  struct vma *v;
+  uint64 next, n;
+
+  argaddr(0, &addr);
+  argint(1, &length);
+
+  // Loop through process VMAs in specified address range.
+  // Assuming one munmap() call can unmap multiple contiguous memory areas.
+  next = addr;
+  while (next < addr + length){
+    // Assuming there are no gaps between areas.
+    if((v = vmafetch(next)) == 0)
+      return -1;
+
+    // Calculate size to be unmapped, depending on
+    // specified address range and VMA scope.
+    if (v->addr == next){
+      n = v->length;
+      if(v->addr + v->length > addr + length)
+        n = addr + length - v->addr;
+    }
+    else{
+      n = v->addr + v->length - addr;
+      if(v->addr + v->length > addr + length)
+        n = length;
+    }
+
+    if(vmaunmap(v, next, n) != 0)
+      return -1;
+
+    next += n;
+  }
+
+  return 0;
 }

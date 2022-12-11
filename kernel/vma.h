@@ -5,6 +5,6 @@ struct vma {
   int length;                   // size in bytes
   char readable;
   char writeable;
-  enum { SHARED, PRIVATE} map;  // save (or not) changes to file
+  enum { SHARED, PRIVATE } map; // save (or not) changes to file
   struct file *file;            // file to be mapped
 };

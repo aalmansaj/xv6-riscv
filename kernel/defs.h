@@ -183,7 +183,12 @@ int             copyinstr(pagetable_t, char *, uint64, uint64);
 // vma.c
 void            vmainit(void);
 struct vma*     vmaalloc(void);
+void            vmadealloc(struct vma* v);
+struct vma*     vmadup(struct vma* v);
+struct vma*     vmafetch(uint64 addr);
 int             vmaloadpage(uint64 addr);
+int             vmaunmap(struct vma *v, uint64 addr, int n);
+int             vmawrite(struct vma *v, uint64 addr, int n);
 
 // plic.c
 void            plicinit(void);
